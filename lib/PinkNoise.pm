@@ -20,7 +20,7 @@ L<PinkNoise::Render>
 
 =item *
 
-L<PinkNoise::Database>
+L<PinkNoise::DB>
 
 =back
 
