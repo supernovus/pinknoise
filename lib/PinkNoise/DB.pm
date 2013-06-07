@@ -64,10 +64,20 @@ sub getNodes {
   }
 }
 
+sub countNodes {
+  my ($self, $query) = @_;
+  $self->nodes->count($query);
+}
+
 sub getNodesByTag {
   my $self = shift;
   my $tag  = shift;
   $self->getNodes({tags => $tag}, @_);
+}
+
+sub countNodesByTag {
+  my ($self, $tag) = @_;
+  $self->countNodes({tags => $tag});
 }
 
 sub update {
