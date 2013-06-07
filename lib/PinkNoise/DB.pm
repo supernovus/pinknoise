@@ -37,6 +37,11 @@ sub getConfig {
   $self->config->find_one({_id => $id});
 }
 
+sub saveConfig {
+  my ($self, $config) = @_;
+  $self->config->save($config);
+}
+
 sub getNodeById {
   my ($self, $id, $fields) = @_;
   $self->nodes->find_one({_id => $id}, $fields);
@@ -62,7 +67,48 @@ sub getNodes {
 sub getNodesByTag {
   my $self = shift;
   my $tag  = shift;
-  $self->getNodes({_tags => $tag}, @_);
+  $self->getNodes({tags => $tag}, @_);
+}
+
+sub update {
+  my ($self, $query, $spec, %opts) = @_;
+  if (!ref $query) {
+    $query = {_id => $query};
+  }
+  $self->nodes->update($query, $spec, \%opts);
+}
+
+sub addTag {
+  my $self  = shift;
+  my $query = shift;
+  my $tag   = shift;
+  my $spec;
+  if (ref $tag eq 'ARRAY') {
+    $spec = { '$addToSet' => { 'tags' => { '$each' => $tag } } };
+  }
+  else {
+    $spec = { '$addToSet' => { tags => $tag } };
+  }
+  $self->update($query, $spec, @_);
+}
+
+sub delTag {
+  my $self  = shift;
+  my $query = shift;
+  my $tag   = shift;
+  my $spec;
+  if (ref $tag eq 'ARRAY') {
+    $spec = { '$pullAll' => { tags => $tag } };
+  }
+  else {
+    $spec = { '$pull' => { tags => $tag } };
+  }
+  $self->update($query, $spec, @_);
+}
+
+sub save {
+  my ($self, $node) = @_;
+  $self->nodes->save($node);
 }
 
 1;
