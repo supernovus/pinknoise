@@ -3,54 +3,50 @@ package PinkNoise::Render;
 use v5.12;
 use Moo;
 use POSIX qw(ceil);
+use Carp;
+use utf8::all;
+use Text::Markdown;
 
 extends 'Webtoo::Template::TT';
 
 ## This MUST be a PinkNoise::DB object.
 has db     => (is => 'ro', required => 1);
-has site   => (is => 'lazy');
-has layout => (is => 'lazy');
-
-sub __getconfig {
-  my ($self, $name, %def) = @_;
-  my $doc  = $self->db->getConfig($name);
-  if (!$doc) {
-    $doc = \%def;
-    $doc->{_id} = $name;
-  }
-  return $doc;
-}
+has site   => (is => 'lazy', clearer => 'reload_site');
+has layout => (is => 'lazy', handles => [
+  'page_count', 'index_path', 'node_path', 'get_node_type', 'get_datetime',
+]);
 
 sub _build_site {
   my $self = shift;
-  $self->__getconfig('site');
+  $self->db->getConfig('site');
 }
 
 sub _build_layout {
   my $self = shift;
-  my %default = (
-    index => {
-      display   => 10,
-      template  => 'index.tt',
-    },
-    page => {
-      template => 'page.tt',
-    },
-    story => {
-      template => 'story.tt',
-    },
-    chapter => {
-      template => 'chapter.tt',
-    },
-  );
-  $self->__getconfig('layout', %default);
+  return PinkNoise::Layout->new(db => $self->db);
+}
+
+## Useful to call from templates.
+sub strftime {
+  my ($self, $format, $updated) = @_;
+  my $dt = $self->get_datetime($updated);
+  if (ref $dt eq 'DateTime') {
+    return $dt->strftime($format);
+  }
+  else {
+    carp "Could not handle datetime format '$updated'";
+    return $updated;
+  }
 }
 
 sub renderNode {
   my ($self, $node, %opts) = @_;
   if (!ref $node) {
-    $node = $self->db->getNodebyId($node);
+    $node = $self->db->getNodeById($node);
   }
+  my $type = $self->get_node_type($node);
+
+  die "TODO: Not finished yet";
 }
 
 sub node_count {
@@ -58,65 +54,30 @@ sub node_count {
   $self->db->countNodesByTag($tag);
 }
 
-sub page_count {
-  my ($self, $node_count, $display) = @_;
-  if (!$display) {
-    $display = $self->layout->{index}{display};
-  }
-  ceil($node_count / $display);
-}
-
-sub index_path {
-  my ($self, $tag, $page) = @_;
-  if (!$page) { $page = 1; }
-  my $dir;
-  if ($tag eq 'TOC') {
-    if ($page > 1) {
-      $dir = '/index/';
-    }
-    else {
-      $dir = '/';
-    }
-  }
-  else {
-    $dir = "/tags/$tag/";
-  }
-  my $file;
-  if ($page == 1) {
-    $file = 'index.html';
-  }
-  else {
-    $file = "page${page}.html";
-  }
-  return $dir . $file;
-}
-
 sub pager {
-  my ($self, $page_count, %opts) = @_;
+  my ($self, %opts) = @_;
   my @pager;
-  for my $page ( 1 .. $page_count) {
-    my $item = { num => $page, current => 0 };
-    if (exists $opts{current_page}) {
-      my $current_page = $opts{current_page};
-      if ($page == $current_page) {
-        $item->{current} = 1;
-      }
-    }
+  for my $page ( 1 .. $opts{count}) {
+    my $item = { num => $page };
     if (exists $opts{link}) {
       my $link;
       my $type = $opts{link};
       if ($type eq 'index') {
-        my $tag;
         if (exists $opts{tag}) {
-          $tag = $opts{tag};
+          $link = $self->index_path($opts{tag}, $page);
         }
         else {
-          $tag = 'TOC';
+          carp "Indexes need tag to build link.";
         }
-        $link = $self->index_path($tag, $page);
       }
-      elsif ($type eq 'page') {
-        warn "Not implemented yet.";
+      elsif ($type eq 'article') {
+        carp "Multi-page articles are not implemented yet.";
+      }
+      elsif ($type eq 'chapter') {
+        carp "Chapters are not implemented yet.";
+      }
+      elsif ($type eq 'story') {
+        carp "Story nodes should have 0 or 1 pages, and do not need pagers.";
       }
       if ($link) {
         $item->{link} = $link;
@@ -127,11 +88,11 @@ sub pager {
   return \@pager;
 }
 
-## Render every page of an index, returning an array of pages.
+## Render every page of an index, returning a hash of $filename => $content
 sub renderIndex {
   my ($self, $tag, %opts) = @_;
 
-  my @pages;
+  my $pages = {};
 
   my $node_count = $self->node_count($tag);
   my $page_count = $self->page_count($node_count);
@@ -140,23 +101,34 @@ sub renderIndex {
   $opts{node_count} = $node_count;
   $opts{page_count} = $page_count;
 
-  ## Build a pager.
-  $opts{page_list} = $self->pager($page_count);
+  ## Generate a pager
+  my $page_list = $opts{page_list} = $self->pager(
+    count => $page_count,
+    link  => 'index',
+    tag   => $tag,
+  );
 
   ## Okay, process each page of the index.
-  for my $page ( 1 .. $page_count ) {
-    my $rendered = $self->renderIndexPage($tag, $page, %opts);
-    push @pages, $rendered;
+  for my $page (@$page_list) {
+    my $rendered = $self->renderIndexPage($tag, $page->{num}, %opts);
+    my $pkey;
+    if (exists $page->{link}) {
+      $pkey = $page->{link};
+    }
+    else {
+      $pkey = $page->{num};
+    }
+    $pages->{$pkey} = $rendered;
   }
 
-  return @pages;
+  return $pages;
 }
 
 sub renderIndexPage {
   my ($self, $tag, $page, %opts) = @_;
 
   ## Get our layout configuration.
-  my $index = $self->layout->{index};
+  my $index = $self->layout->index;
 
   ## The number of items to display, and the template.
   my $display  = $index->{display};
@@ -174,7 +146,7 @@ sub renderIndexPage {
   ## Get all Nodes associated with this tag.
   my $nodes = $self->db->getNodesByTag($tag, %node_opts);
 
-  my ($node_count, $page_count);
+  my ($node_count, $page_count, $page_list);
   if (exists $opts{node_count}) {
     $node_count = $opts{node_count};
   }
@@ -187,15 +159,19 @@ sub renderIndexPage {
   else {
     $page_count = $self->page_count($node_count, $display);
   }
-
-  my $page_list = $self->pager($page_count, 
-    link         => 'index',
-    tag          => $tag,
-    current_page => $page,
-  );
+  if (exists $opts{page_list}) {
+    $page_list = $opts{page_list};
+  }
+  else {
+    $page_list = $self->pager(
+      count => $page_count, 
+      link  => 'index',
+      tag   => $tag,
+    );
+  }
 
   my $template_data = {
-    index_tag     => $
+    index_tag     => $tag,
     current_page  => $page,
     page_count    => $page_count,
     node_count    => $node_count,
@@ -203,6 +179,7 @@ sub renderIndexPage {
     layout        => $index,
     nodes         => $nodes,
     site          => $self->site,
+    render        => $self,
   };
 
   $self->render($template, $template_data);

@@ -2,6 +2,7 @@ package PinkNoise::DB;
 
 use v5.12;
 use Moo;
+use utf8::all;
 use MongoDB;
 
 has host   => (is => 'ro', default => sub { 'localhost' });
@@ -33,8 +34,13 @@ sub _build_config {
 }
 
 sub getConfig {
-  my ($self, $id) = @_;
-  $self->config->find_one({_id => $id});
+  my ($self, $id, %default) = @_;
+  my $doc = $self->config->find_one({_id => $id});
+  if (!$doc) {
+    $doc = \%default;
+    $doc->{_id} = $id;
+  }
+  return $doc;
 }
 
 sub saveConfig {
