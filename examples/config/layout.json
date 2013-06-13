@@ -1,0 +1,43 @@
+{
+  "max_name_size" => 24,
+  "indexes" => {
+    "default" => "tag",
+    "toc" => {
+      "display"    => 10,
+      "template"   => "index.tt",
+      "path_first" => "/index.html",
+      "path_more"  => "/index/page$page.html"
+    },
+    "tag" => {
+      "display"    => 10,
+      "template"   => "index.tt",
+      "path_first" => "/tags/$tag/index.html",
+      "path_more"  => "/tags/$tag/page$page.html"
+    }
+  },
+  "nodes" => {
+    "default" => "blog",
+    "blog" => {
+      "template"    => "article.tt",
+      "path_single" => "/articles/$year/$month/$name.html",
+      "path_first"  => "/articles/$year/$month/index.html",
+      "path_more"   => "/articles/$year/$month/page$page.html"
+    },
+    "topic" => {
+      "template"     => "article.tt",
+      "path_single"  => "/articles/$name.html",
+      "path_first"   => "/articles/$name/index.html",
+      "path_more"    => "/articles/$name/page$page.html"
+    },
+    "story" => {
+      "template"    => "story.tt",
+      "path_single" => "/stories/$name/index.html"
+    },
+    "chapter" => {
+      "template"    => "chapter.tt",
+      "path_single" => "/stories/$story/$name.html",
+      "path_first"  => "/stories/$story/$name/page$page.html",
+      "path_more"   => "/stories/$story/$name/page$page.html"
+    }
+  }
+}

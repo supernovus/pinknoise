@@ -4,6 +4,7 @@ use v5.12;
 use Moo;
 use utf8::all;
 use MongoDB;
+use Carp;
 
 has host   => (is => 'ro', default => sub { 'localhost' });
 has dbname => (is => 'ro', required => 1);
@@ -34,11 +35,10 @@ sub _build_config {
 }
 
 sub getConfig {
-  my ($self, $id, %default) = @_;
+  my ($self, $id) = @_;
   my $doc = $self->config->find_one({_id => $id});
   if (!$doc) {
-    $doc = \%default;
-    $doc->{_id} = $id;
+    croak "Configuration document '$id' not found, cannot continue.";
   }
   return $doc;
 }
@@ -46,6 +46,25 @@ sub getConfig {
 sub saveConfig {
   my ($self, $config) = @_;
   $self->config->save($config);
+}
+
+sub loadConfig {
+  require JSON;
+  my ($self, $id, $json) = @_;
+  my $config;
+  if ($json =~ /^\{/) {
+    $config = decode_json($json);
+  }
+  elsif (-f $json) {
+    require Perl6::Slurp;
+    my $jsonfile = slurp $json;
+    $config = decode_json($jsonfile);
+  }
+  else {
+    croak "Invalid JSON config '$json' passed to loadConfig";
+  }
+  $config->{_id} = $id;
+  $self->saveConfig($config);
 }
 
 sub getNodeById {

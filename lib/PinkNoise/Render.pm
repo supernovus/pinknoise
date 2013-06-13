@@ -8,12 +8,11 @@ use utf8::all;
 use Text::Markdown;
 
 extends 'Webtoo::Template::TT';
+with 'PinkNoise::Registry';
 
-## This MUST be a PinkNoise::DB object.
-has db     => (is => 'ro', required => 1);
 has site   => (is => 'lazy', clearer => 'reload_site');
 has layout => (is => 'lazy', handles => [
-  'page_count', 'index_path', 'node_path', 'get_node_type', 'get_datetime',
+  'get_index_opts', 'index_path', 'node_path', 'get_node_type', 'get_datetime',
 ]);
 
 sub _build_site {
@@ -24,6 +23,14 @@ sub _build_site {
 sub _build_layout {
   my $self = shift;
   return PinkNoise::Layout->new(db => $self->db);
+}
+
+## Only useful if matching Render and Layout handlers exist for the given
+## node type. Otherwise, call the add_handler methods explicitly.
+sub add_node_plugin {
+  my $self = shift;
+  $self->add_handler(@_);
+  $self->layout->add_handler(@_);
 }
 
 ## Useful to call from templates.
@@ -54,6 +61,11 @@ sub node_count {
   $self->db->countNodesByTag($tag);
 }
 
+sub page_count {
+  my ($self, $node_count, $display) = @_;
+  ceil($node_count / $display);
+}
+
 sub pager {
   my ($self, %opts) = @_;
   my @pager;
@@ -61,8 +73,20 @@ sub pager {
     my $item = { num => $page };
     if (exists $opts{link}) {
       my $link;
-      my $type = $opts{link};
-      if ($type eq 'index') {
+      my $linkopts = $opts{link};
+      my $linktype = ref $type;
+      if ($linktype) {
+        if ($linktype eq 'CODE') {
+          $link = $linkopts($page);
+        }
+        elsif ($linkopts->can('get_page_link')) {
+          $link = $linkopts->get_page_link($page, \%opts);
+        }
+        else {
+          carp "Unknown reference link type '$linktype'";
+        }
+      }
+      elsif ($linkopts eq 'index') {
         if (exists $opts{tag}) {
           $link = $self->index_path($opts{tag}, $page);
         }
@@ -70,14 +94,8 @@ sub pager {
           carp "Indexes need tag to build link.";
         }
       }
-      elsif ($type eq 'article') {
-        carp "Multi-page articles are not implemented yet.";
-      }
-      elsif ($type eq 'chapter') {
-        carp "Chapters are not implemented yet.";
-      }
-      elsif ($type eq 'story') {
-        carp "Story nodes should have 0 or 1 pages, and do not need pagers.";
+      else {
+        carp "Unhandled link type '$linkopts'";
       }
       if ($link) {
         $item->{link} = $link;
@@ -94,8 +112,10 @@ sub renderIndex {
 
   my $pages = {};
 
+  my $index = $self->get_index_opts($tag);
+
   my $node_count = $self->node_count($tag);
-  my $page_count = $self->page_count($node_count);
+  my $page_count = $self->page_count($node_count, $index->{display});
 
   ## Add the counts to the opts, to pass along.
   $opts{node_count} = $node_count;
@@ -128,7 +148,7 @@ sub renderIndexPage {
   my ($self, $tag, $page, %opts) = @_;
 
   ## Get our layout configuration.
-  my $index = $self->layout->index;
+  my $index = $self->get_index_opts($tag);
 
   ## The number of items to display, and the template.
   my $display  = $index->{display};

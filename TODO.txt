@@ -1,0 +1,3 @@
+* Support DateTime and DateTime::Tiny natively. No more get_datetime().
+* Support the 'boolean' package.
+* Write rendering plugins.
