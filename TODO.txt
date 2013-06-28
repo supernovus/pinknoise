@@ -1,3 +1,8 @@
-* Support DateTime and DateTime::Tiny natively. No more get_datetime().
-* Support the 'boolean' package.
+= High Priority
+
 * Write rendering plugins.
+
+= Low Priority
+
+* Support the 'boolean' package.
+

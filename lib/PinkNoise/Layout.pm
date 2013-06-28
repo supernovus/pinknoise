@@ -4,14 +4,12 @@ use v5.12;
 use Moo;
 use utf8::all;
 use Carp;
-use DateTime::Format::Perl6;
 
 with 'PinkNoise::Registry';
 
 has config => (is => 'lazy', clearer => 'reload_config');
 
 has path_cache      => (is => 'ro', default => sub { {} });
-has timestamp_cache => (is => 'ro', default => sub { {} });
 
 sub _build_config {
   my $self = shift;
@@ -36,29 +34,6 @@ sub default_node_type {
 sub node_types {
   my $self = shift;
   return $self->config->{nodes};
-}
-
-sub get_datetime {
-  my ($self, $updated) = @_;
-  if (exists $self->timestamp_cache->{$updated})
-  {
-    return $self->timestamp_cache->{$updated};
-  }
-  my $dt;
-  my $format = DateTime::Format::Perl6->new();
-  if ($updated =~ /^\d+$/) {
-    ## Integers are assumed to be Unix Epoch values.
-    $dt = DateTime->from_epoch(
-      epoch     => $updated,
-      formatter => $format,
-    );
-    $dt->set_time_zone('local');
-  }
-  else {
-    ## Any other string must be a Perl 6 style ISO8601 datetime string.
-    $dt = $format->parse_datetime($updated);
-  }
-  return $self->timestamp_cache->{$updated} = $dt;
 }
 
 sub get_node_type {

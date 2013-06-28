@@ -16,7 +16,7 @@ has config => (is => 'lazy');
 
 sub _build_client {
   my $self = shift;
-  MongoDB::MongoClient->new(host => $self->host);
+  MongoDB::MongoClient->new(host => $self->host, dt_type => 'DateTime::Tiny');
 }
 
 sub _build_db {

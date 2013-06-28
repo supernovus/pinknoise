@@ -12,7 +12,7 @@ with 'PinkNoise::Registry';
 
 has site   => (is => 'lazy', clearer => 'reload_site');
 has layout => (is => 'lazy', handles => [
-  'get_index_opts', 'index_path', 'node_path', 'get_node_type', 'get_datetime',
+  'get_index_opts', 'index_path', 'node_path', 'get_node_type', 
 ]);
 
 sub _build_site {
@@ -33,19 +33,6 @@ sub add_node_plugin {
   $self->layout->add_handler(@_);
 }
 
-## Useful to call from templates.
-sub strftime {
-  my ($self, $format, $updated) = @_;
-  my $dt = $self->get_datetime($updated);
-  if (ref $dt eq 'DateTime') {
-    return $dt->strftime($format);
-  }
-  else {
-    carp "Could not handle datetime format '$updated'";
-    return $updated;
-  }
-}
-
 sub renderNode {
   my ($self, $node, %opts) = @_;
   if (!ref $node) {
@@ -53,7 +40,9 @@ sub renderNode {
   }
   my $type = $self->get_node_type($node);
 
+  ## TODO: finish me.
   die "TODO: Not finished yet";
+
 }
 
 sub node_count {
@@ -74,7 +63,7 @@ sub pager {
     if (exists $opts{link}) {
       my $link;
       my $linkopts = $opts{link};
-      my $linktype = ref $type;
+      my $linktype = ref $linkopts;
       if ($linktype) {
         if ($linktype eq 'CODE') {
           $link = $linkopts($page);
@@ -92,6 +81,14 @@ sub pager {
         }
         else {
           carp "Indexes need tag to build link.";
+        }
+      }
+      elsif ($linkopts eq 'node') {
+        if (exists $opts{node}) {
+          $link = $self->node_path($opts{node}, $page);
+        }
+        else {
+          carp "Node links need the node to build the link.";
         }
       }
       else {
